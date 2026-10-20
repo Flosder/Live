@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assistir ao vivo</title>
+<style>
+:root{--bg:#0b0b0b;--fg:#f5f5f5;--gold:#f5b800;--card:#1a1a1a;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,sans-serif}
+header{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #222}
+header b{color:var(--gold);letter-spacing:1px}
+#badge{background:#c00;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:700}
+#title{padding:10px 14px 0;font-size:18px;font-weight:700}
+main{display:flex;flex-direction:column;gap:10px;padding:10px}
+.player{position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:10px;overflow:hidden}
+.player iframe,.chat iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.chat{position:relative;height:60vh;min-height:320px;background:var(--card);border-radius:10px;overflow:hidden}
+@media (min-width:900px){main{flex-direction:row;align-items:flex-start}.player{flex:3}.chat{flex:1;height:calc((100vw - 30px) * .75 * 9 / 16);min-height:420px}}
+.box{max-width:560px;margin:20px auto;padding:0 14px}
+.box label{display:block;margin:12px 0 4px;font-size:14px}
+.box input{width:100%;min-height:48px;border-radius:10px;border:1px solid #333;background:#000;color:var(--fg);padding:0 12px;font-size:16px}
+button,a.btn{display:inline-flex;align-items:center;justify-content:center;min-height:48px;border:0;border-radius:10px;background:var(--gold);color:#000;font-weight:700;font-size:15px;padding:0 16px;margin:10px 8px 0 0;text-decoration:none}
+button.s,a.s{background:var(--card);color:var(--fg)}
+#out{margin-top:16px;padding:12px;background:var(--card);border-radius:10px;word-break:break-all;font-size:14px}
+.note{font-size:13px;opacity:.75;margin:14px 0 0}
+.links{padding:0 14px 18px}
+</style>
+</head>
+<body>
+<header><b>BARÃO EM DIA</b><span id="badge">AO VIVO</span></header>
+
+<div id="title"></div>
+<main id="watch" hidden>
+ <div class="player"><iframe id="pl" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>
+ <div class="chat"><iframe id="ch"></iframe></div>
+</main>
+<div class="links" id="links" hidden>
+ <a class="btn s" id="yt" target="_blank" rel="noopener">Abrir no YouTube</a>
+ <a class="btn s" id="wa" target="_blank" rel="noopener">Compartilhar no WhatsApp</a>
+ <p class="note">O chat usa o chat da live do YouTube. Para escrever, a pessoa precisa entrar com a conta Google dela.</p>
+</div>
+
+<section class="box" id="setup" hidden>
+ <h2>Gerar link da transmissão</h2>
+ <p class="note">Cole o link da sua live do YouTube. Eu monto a página para os telespectadores.</p>
+ <label for="u">Link da live no YouTube</label>
+ <input id="u" placeholder="https://www.youtube.com/watch?v=... ou youtube.com/live/...">
+ <label for="t">Título (opcional)</label>
+ <input id="t" placeholder="Ex.: Barão FC x Visitante">
+ <button id="go">Gerar link</button>
+ <div id="out" hidden>
+  <div id="lk"></div>
+  <button id="cp">Copiar link</button>
+  <a class="btn s" id="op">Abrir</a>
+ </div>
+ <p class="note">A live precisa estar criada no YouTube, com o chat ativado e a incorporação permitida.</p>
+</section>
+
+<script>
+const $=id=>document.getElementById(id);
+const q=new URLSearchParams(location.search);
+function getId(s){
+ s=(s||'').trim();
+ if(/^[\w-]{11}$/.test(s))return s;
+ try{
+  const u=new URL(s.startsWith('http')?s:'https://'+s);
+  if(u.hostname.includes('youtu.be'))return u.pathname.slice(1,12);
+  if(u.searchParams.get('v'))return u.searchParams.get('v');
+  const m=u.pathname.match(/\/(live|embed|shorts)\/([\w-]{11})/);
+  if(m)return m[2];
+ }catch(e){}
+ return '';
+}
+const id=getId(q.get('v'));
+if(id){
+ const t=q.get('t')||'';
+ if(t){$('title').textContent=t;document.title=t+' – Ao vivo'}
+ $('pl').src='https://www.youtube.com/embed/'+id+'?autoplay=1&rel=0&playsinline=1';
+ $('ch').src='https://www.youtube.com/live_chat?v='+id+'&embed_domain='+encodeURIComponent(location.hostname)+'&dark_theme=1';
+ $('yt').href='https://www.youtube.com/watch?v='+id;
+ $('wa').href='https://wa.me/?text='+encodeURIComponent((t?t+' – ':'')+'Assista ao vivo: '+location.href);
+ $('watch').hidden=false;$('links').hidden=false;
+}else{
+ $('badge').hidden=true;$('setup').hidden=false;
+}
+$('go').onclick=()=>{
+ const v=getId($('u').value);
+ if(!v){alert('Não consegui entender esse link. Cole o endereço da live do YouTube.');return}
+ const t=$('t').value.trim();
+ const link=location.origin+location.pathname+'?v='+v+(t?'&t='+encodeURIComponent(t):'');
+ $('lk').textContent=link;$('op').href=link;$('out').hidden=false;
+ $('cp').onclick=async()=>{try{await navigator.clipboard.writeText(link);$('cp').textContent='Copiado!'}catch(e){prompt('Copie o link:',link)}};
+};
+</script>
+</body>
+</html>
