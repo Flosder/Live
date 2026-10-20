@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Live Futebol</title>
+<style>
+:root{--bg:#0b0b0b;--fg:#f5f5f5;--gold:#f5b800;--card:#1a1a1a;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,sans-serif;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+#stage{position:relative;width:100%;background:#000;aspect-ratio:16/9}
+canvas{width:100%;height:100%;display:block}
+#rep{position:absolute;inset:0;width:100%;height:100%;background:#000;display:none}
+#repTag{position:absolute;top:8px;right:8px;background:#c00;padding:3px 8px;border-radius:6px;font-weight:700;display:none}
+.bar{display:flex;flex-wrap:wrap;gap:8px;padding:10px}
+button{flex:1 1 auto;min-height:48px;border:0;border-radius:10px;background:var(--card);color:var(--fg);font-size:15px;font-weight:600;padding:0 12px}
+button.p{background:var(--gold);color:#000}
+button.r{background:#c00}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 10px}
+.team{background:var(--card);border-radius:12px;padding:10px}
+.team input{width:100%;background:#000;color:var(--fg);border:1px solid #333;border-radius:8px;padding:8px;margin-bottom:6px}
+.team .row{display:flex;gap:6px;align-items:center}
+.team .row button{min-height:44px}
+.team input[type=color]{padding:0;height:36px}
+.sc{font-size:32px;font-weight:800;min-width:40px;text-align:center}
+h4{margin:12px 10px 0;color:var(--gold)}
+#st{padding:4px 10px;font-size:13px;opacity:.8}
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="c" width="1280" height="720"></canvas><video id="rep" playsinline></video><div id="repTag">REPLAY</div></div>
+<div id="st">Toque em “Ligar câmera” para começar.</div>
+<div class="bar">
+<button class="p" id="bCam">Ligar câmera</button>
+<button id="bFlip">Virar câmera</button>
+<button class="r" id="bRec">● Gravar</button>
+<button id="bRep">⏪ Replay 20s</button>
+</div>
+<h4>Placar e tempo</h4>
+<div class="bar">
+<button class="p" id="bClock">Iniciar tempo</button>
+<button id="bPer">Tempo: 1º</button>
+<button id="bAdd">Acréscimos +1</button>
+<button id="bReset">Zerar jogo</button>
+</div>
+<div class="grid">
+<div class="team"><input id="nA" value="CASA" maxlength="14"><div class="row"><input type="color" id="cA" value="#f5b800"><button id="mA">−</button><span class="sc" id="sA">0</span><button class="p" id="pA">+</button></div></div>
+<div class="team"><input id="nB" value="VISITANTE" maxlength="14"><div class="row"><input type="color" id="cB" value="#1e7be0"><button id="mB">−</button><span class="sc" id="sB">0</span><button class="p" id="pB">+</button></div></div>
+</div>
+<h4>Faixa de aviso e marca</h4>
+<div class="bar">
+<input id="msg" placeholder="Ex.: GOL! / Intervalo" style="flex:2;min-height:48px;border-radius:10px;border:1px solid #333;background:#000;color:#fff;padding:0 10px">
+<button id="bMsg">Mostrar 5s</button>
+<input id="brand" value="BARÃO EM DIA" style="flex:1;min-height:48px;border-radius:10px;border:1px solid #333;background:#000;color:#fff;padding:0 10px">
+</div>
+<div class="bar"><button id="bFull">Tela cheia</button><button id="bSave" disabled>Salvar jogo gravado</button></div>
+<script>
+const $=id=>document.getElementById(id);
+const cv=$('c'),ctx=cv.getContext('2d'),vid=document.createElement('video');
+vid.muted=true;vid.playsInline=true;
+let stream=null,facing='environment',micStream=null;
+const S={a:0,b:0,secs:0,run:false,per:1,add:0,msg:'',msgUntil:0};
+const st=t=>$('st').textContent=t;
+async function cam(){
+ try{
+  if(stream)stream.getTracks().forEach(t=>t.stop());
+  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1280},height:{ideal:720}},audio:true});
+  vid.srcObject=stream;await vid.play();
+  st('Câmera ligada.');startSeg();
+  try{await navigator.wakeLock.request('screen')}catch(e){}
+ }catch(e){st('Não foi possível acessar a câmera/microfone. Permita o acesso e abra em HTTPS no Chrome. ('+e.name+')')}
+}
+$('bCam').onclick=cam;
+$('bFlip').onclick=()=>{facing=facing==='environment'?'user':'environment';if(stream)cam()};
+setInterval(()=>{if(S.run)S.secs++},1000);
+const fmt=s=>String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
+function draw(){
+ const W=1280,H=720;
+ ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
+ if(vid.videoWidth){
+  const r=Math.max(W/vid.videoWidth,H/vid.videoHeight),w=vid.videoWidth*r,h=vid.videoHeight*r;
+  ctx.drawImage(vid,(W-w)/2,(H-h)/2,w,h);
+ }
+ const nA=$('nA').value.toUpperCase(),nB=$('nB').value.toUpperCase(),cA=$('cA').value,cB=$('cB').value;
+ const x=30,y=30,hh=64;
+ ctx.font='700 30px system-ui';
+ const wA=Math.max(140,ctx.measureText(nA).width+40),wB=Math.max(140,ctx.measureText(nB).width+40);
+ ctx.fillStyle='rgba(0,0,0,.85)';ctx.fillRect(x,y,wA+wB+90+170,hh);
+ ctx.fillStyle=cA;ctx.fillRect(x,y,8,hh);
+ ctx.fillStyle='#fff';ctx.textBaseline='middle';
+ ctx.fillText(nA,x+20,y+hh/2);
+ ctx.fillStyle='#f5b800';ctx.font='800 36px system-ui';ctx.textAlign='center';
+ ctx.fillText(S.a+' x '+S.b,x+wA+45,y+hh/2);
+ ctx.textAlign='left';ctx.font='700 30px system-ui';ctx.fillStyle='#fff';
+ ctx.fillText(nB,x+wA+90+14,y+hh/2);
+ ctx.fillStyle=cB;ctx.fillRect(x+wA+wB+90-8,y,8,hh);
+ const tx=x+wA+wB+90;
+ ctx.fillStyle='#f5b800';ctx.fillRect(tx,y,170,hh);
+ ctx.fillStyle='#000';ctx.font='800 28px system-ui';
+ ctx.fillText(fmt(S.secs)+(S.add?' +'+S.add:''),tx+14,y+hh/2-8);
+ ctx.font='700 16px system-ui';ctx.fillText(S.per+'º TEMPO',tx+14,y+hh/2+18);
+ ctx.fillStyle='rgba(0,0,0,.7)';ctx.font='800 22px system-ui';
+ const b=$('brand').value,bw=ctx.measureText(b).width+30;
+ ctx.fillRect(W-bw-30,H-70,bw,44);ctx.fillStyle='#f5b800';ctx.textBaseline='middle';
+ ctx.fillText(b,W-bw-15,H-48);
+ if(Date.now()<S.msgUntil){
+  ctx.fillStyle='rgba(245,184,0,.95)';ctx.fillRect(0,H-150,W-bw-50,64);
+  ctx.fillStyle='#000';ctx.font='800 38px system-ui';ctx.fillText(S.msg,30,H-118);
+ }
+ requestAnimationFrame(draw);
+}
+draw();
+const bump=()=>{$('sA').textContent=S.a;$('sB').textContent=S.b};
+$('pA').onclick=()=>{S.a++;bump();flash('GOL! '+$('nA').value)};
+$('mA').onclick=()=>{S.a=Math.max(0,S.a-1);bump()};
+$('pB').onclick=()=>{S.b++;bump();flash('GOL! '+$('nB').value)};
+$('mB').onclick=()=>{S.b=Math.max(0,S.b-1);bump()};
+function flash(t){S.msg=t;S.msgUntil=Date.now()+5000}
+$('bMsg').onclick=()=>{if($('msg').value)flash($('msg').value)};
+$('bClock').onclick=()=>{S.run=!S.run;$('bClock').textContent=S.run?'Pausar tempo':'Iniciar tempo'};
+$('bPer').onclick=()=>{S.per=S.per===1?2:1;if(S.per===2&&S.secs<2700)S.secs=2700;if(S.per===1)S.secs=0;S.add=0;$('bPer').textContent='Tempo: '+S.per+'º'};
+$('bAdd').onclick=()=>{S.add++};
+$('bReset').onclick=()=>{if(confirm('Zerar placar e tempo?')){Object.assign(S,{a:0,b:0,secs:0,run:false,per:1,add:0});bump();$('bClock').textContent='Iniciar tempo';$('bPer').textContent='Tempo: 1º'}};
+/* Gravação do jogo inteiro (placar embutido) */
+let out=null,full=[],recOn=false,mime='';
+function pickMime(){return ['video/mp4','video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'].find(m=>MediaRecorder.isTypeSupported(m))||''}
+function outStream(){const s=cv.captureStream(30);if(stream)stream.getAudioTracks().forEach(t=>s.addTrack(t));return s}
+$('bRec').onclick=()=>{
+ if(!stream){st('Ligue a câmera primeiro.');return}
+ if(!recOn){
+  mime=pickMime();full=[];
+  out=new MediaRecorder(outStream(),{mimeType:mime||undefined,videoBitsPerSecond:4e6});
+  out.ondataavailable=e=>e.data.size&&full.push(e.data);
+  out.onstop=()=>{$('bSave').disabled=!full.length};
+  out.start(2000);recOn=true;$('bRec').textContent='■ Parar gravação';st('Gravando com placar embutido.');
+ }else{out.stop();recOn=false;$('bRec').textContent='● Gravar';st('Gravação parada. Toque em “Salvar jogo gravado”.')}
+};
+$('bSave').onclick=()=>{
+ const ext=mime.includes('mp4')?'mp4':'webm';
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(full,{type:mime||'video/webm'}));
+ a.download='jogo-'+new Date().toISOString().slice(0,16).replace(/[:T]/g,'-')+'.'+ext;a.click();
+};
+/* Replay: segmentos de 10s, guarda os 2 últimos completos */
+let segs=[],segRec=null,segTimer=null;
+function startSeg(){
+ clearTimeout(segTimer);
+ if(segRec&&segRec.state!=='inactive'){segRec.onstop=null;segRec.stop()}
+ const m=pickMime(),ch=[];
+ segRec=new MediaRecorder(outStream(),{mimeType:m||undefined,videoBitsPerSecond:3e6});
+ segRec.ondataavailable=e=>e.data.size&&ch.push(e.data);
+ segRec.onstop=()=>{if(ch.length){segs.push(new Blob(ch,{type:m||'video/webm'}));segs=segs.slice(-2)}startSeg()};
+ segRec.start();
+ segTimer=setTimeout(()=>{if(segRec.state==='recording')segRec.stop()},10000);
+}
+const rep=$('rep');
+$('bRep').onclick=()=>{
+ if(!segs.length){st('Aguarde ~10s de vídeo para ter replay.');return}
+ const list=[...segs];let i=0;
+ rep.style.display='block';$('repTag').style.display='block';
+ const next=()=>{
+  if(i>=list.length){rep.style.display='none';$('repTag').style.display='none';return}
+  rep.src=URL.createObjectURL(list[i++]);rep.play()
+ };
+ rep.onended=next;rep.onerror=()=>{rep.style.display='none';$('repTag').style.display='none'};next();
+};
+rep.onclick=()=>{rep.pause();rep.style.display='none';$('repTag').style.display='none'};
+$('bFull').onclick=()=>{$('stage').requestFullscreen?.();screen.orientation?.lock?.('landscape').catch(()=>{})};
+</script>
+</body>
+</html>
