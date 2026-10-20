@@ -24,6 +24,10 @@ button.r{background:#c00}
 .team input[type=color]{padding:0;height:36px}
 .sc{font-size:32px;font-weight:800;min-width:40px;text-align:center}
 h4{margin:12px 10px 0;color:var(--gold)}
+.set{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 10px}
+.set label{font-size:13px;display:flex;flex-direction:column;gap:4px}
+.set input,.set select{min-height:44px;background:#000;color:var(--fg);border:1px solid #333;border-radius:8px;padding:0 8px;width:100%}
+.set input[type=color]{padding:0}
 #st{padding:4px 10px;font-size:13px;opacity:.8}
 </style>
 </head>
@@ -41,7 +45,7 @@ h4{margin:12px 10px 0;color:var(--gold)}
 <button class="p" id="bClock">Iniciar tempo</button>
 <button id="bPer">Tempo: 1º</button>
 <button id="bAdd">Acréscimos +1</button>
-<button id="bReset">Zerar jogo</button>
+<button id="bZ">Zerar placar</button><button id="bSwap">Trocar lados</button><button id="bReset">Zerar tudo</button>
 </div>
 <div class="grid">
 <div class="team"><input id="nA" value="CASA" maxlength="14"><div class="row"><input type="color" id="cA" value="#f5b800"><button id="mA">−</button><span class="sc" id="sA">0</span><button class="p" id="pA">+</button></div></div>
@@ -50,8 +54,19 @@ h4{margin:12px 10px 0;color:var(--gold)}
 <h4>Faixa de aviso e marca</h4>
 <div class="bar">
 <input id="msg" placeholder="Ex.: GOL! / Intervalo" style="flex:2;min-height:48px;border-radius:10px;border:1px solid #333;background:#000;color:#fff;padding:0 10px">
-<button id="bMsg">Mostrar 5s</button>
-<input id="brand" value="BARÃO EM DIA" style="flex:1;min-height:48px;border-radius:10px;border:1px solid #333;background:#000;color:#fff;padding:0 10px">
+<button id="bMsg">Mostrar</button>
+<input id="brand" value="BARÃO EM DIA" placeholder="Nome do canal" style="flex:1;min-height:48px;border-radius:10px;border:1px solid #333;background:#000;color:#fff;padding:0 10px">
+</div>
+<h4>Configurações (ficam salvas)</h4>
+<div class="set">
+<label>Nome do canal na tela (vazio = esconde)<input id="brand2" placeholder="Ex.: BARÃO EM DIA"></label>
+<label>Duração da mensagem (segundos)<input id="dur" type="number" min="1" max="60" value="5"></label>
+<label>Texto do gol<input id="goal" value="GOL!" maxlength="20"></label>
+<label>Duração de cada tempo (min)<input id="plen" type="number" min="1" max="90" value="45"></label>
+<label>Cor de destaque<input id="acc" type="color" value="#f5b800"></label>
+<label>Tamanho do placar (%)<input id="scl" type="range" min="60" max="140" value="100"></label>
+<label>Posição do placar<select id="pos"><option value="topo">Topo</option><option value="baixo">Embaixo</option></select></label>
+<label>Restaurar padrão<button id="bDef">Restaurar</button></label>
 </div>
 <div class="bar"><button id="bFull">Tela cheia</button><button id="bSave" disabled>Salvar jogo gravado</button></div>
 <script>
@@ -82,45 +97,62 @@ function draw(){
   ctx.drawImage(vid,(W-w)/2,(H-h)/2,w,h);
  }
  const nA=$('nA').value.toUpperCase(),nB=$('nB').value.toUpperCase(),cA=$('cA').value,cB=$('cB').value;
- const x=30,y=30,hh=64;
+ const k=(+$('scl').value||100)/100,acc=$('acc').value;ctx.save();ctx.scale(k,k);const x=30,hh=64,y=$('pos').value==='baixo'?H/k-hh-30:30;
  ctx.font='700 30px system-ui';
  const wA=Math.max(140,ctx.measureText(nA).width+40),wB=Math.max(140,ctx.measureText(nB).width+40);
  ctx.fillStyle='rgba(0,0,0,.85)';ctx.fillRect(x,y,wA+wB+90+170,hh);
  ctx.fillStyle=cA;ctx.fillRect(x,y,8,hh);
  ctx.fillStyle='#fff';ctx.textBaseline='middle';
  ctx.fillText(nA,x+20,y+hh/2);
- ctx.fillStyle='#f5b800';ctx.font='800 36px system-ui';ctx.textAlign='center';
+ ctx.fillStyle=acc;ctx.font='800 36px system-ui';ctx.textAlign='center';
  ctx.fillText(S.a+' x '+S.b,x+wA+45,y+hh/2);
  ctx.textAlign='left';ctx.font='700 30px system-ui';ctx.fillStyle='#fff';
  ctx.fillText(nB,x+wA+90+14,y+hh/2);
  ctx.fillStyle=cB;ctx.fillRect(x+wA+wB+90-8,y,8,hh);
  const tx=x+wA+wB+90;
- ctx.fillStyle='#f5b800';ctx.fillRect(tx,y,170,hh);
+ ctx.fillStyle=acc;ctx.fillRect(tx,y,170,hh);
  ctx.fillStyle='#000';ctx.font='800 28px system-ui';
  ctx.fillText(fmt(S.secs)+(S.add?' +'+S.add:''),tx+14,y+hh/2-8);
  ctx.font='700 16px system-ui';ctx.fillText(S.per+'º TEMPO',tx+14,y+hh/2+18);
- ctx.fillStyle='rgba(0,0,0,.7)';ctx.font='800 22px system-ui';
+ ctx.restore();ctx.fillStyle='rgba(0,0,0,.7)';ctx.font='800 22px system-ui';
  const b=$('brand').value,bw=ctx.measureText(b).width+30;
- ctx.fillRect(W-bw-30,H-70,bw,44);ctx.fillStyle='#f5b800';ctx.textBaseline='middle';
- ctx.fillText(b,W-bw-15,H-48);
+ if(b){ctx.fillRect(W-bw-30,H-70,bw,44);ctx.fillStyle=acc;ctx.textBaseline='middle';
+ ctx.fillText(b,W-bw-15,H-48)}
  if(Date.now()<S.msgUntil){
-  ctx.fillStyle='rgba(245,184,0,.95)';ctx.fillRect(0,H-150,W-bw-50,64);
+  ctx.fillStyle=acc;ctx.fillRect(0,H-150,W-bw-50,64);
   ctx.fillStyle='#000';ctx.font='800 38px system-ui';ctx.fillText(S.msg,30,H-118);
  }
  requestAnimationFrame(draw);
 }
 draw();
 const bump=()=>{$('sA').textContent=S.a;$('sB').textContent=S.b};
-$('pA').onclick=()=>{S.a++;bump();flash('GOL! '+$('nA').value)};
+$('pA').onclick=()=>{S.a++;bump();flash($('goal').value+' '+$('nA').value)};
 $('mA').onclick=()=>{S.a=Math.max(0,S.a-1);bump()};
-$('pB').onclick=()=>{S.b++;bump();flash('GOL! '+$('nB').value)};
+$('pB').onclick=()=>{S.b++;bump();flash($('goal').value+' '+$('nB').value)};
 $('mB').onclick=()=>{S.b=Math.max(0,S.b-1);bump()};
-function flash(t){S.msg=t;S.msgUntil=Date.now()+5000}
+function flash(t){S.msg=t;S.msgUntil=Date.now()+(+$('dur').value||5)*1000}
 $('bMsg').onclick=()=>{if($('msg').value)flash($('msg').value)};
 $('bClock').onclick=()=>{S.run=!S.run;$('bClock').textContent=S.run?'Pausar tempo':'Iniciar tempo'};
-$('bPer').onclick=()=>{S.per=S.per===1?2:1;if(S.per===2&&S.secs<2700)S.secs=2700;if(S.per===1)S.secs=0;S.add=0;$('bPer').textContent='Tempo: '+S.per+'º'};
+$('bPer').onclick=()=>{S.per=S.per===1?2:1;{const pl=(+$('plen').value||45)*60;if(S.per===2&&S.secs<pl)S.secs=pl}if(S.per===1)S.secs=0;S.add=0;$('bPer').textContent='Tempo: '+S.per+'º'};
 $('bAdd').onclick=()=>{S.add++};
 $('bReset').onclick=()=>{if(confirm('Zerar placar e tempo?')){Object.assign(S,{a:0,b:0,secs:0,run:false,per:1,add:0});bump();$('bClock').textContent='Iniciar tempo';$('bPer').textContent='Tempo: 1º'}};
+$('bZ').onclick=()=>{if(confirm('Zerar só o placar (gols)?')){S.a=0;S.b=0;bump()}};
+$('bSwap').onclick=()=>{
+ [$('nA').value,$('nB').value]=[$('nB').value,$('nA').value];
+ [$('cA').value,$('cB').value]=[$('cB').value,$('cA').value];
+ [S.a,S.b]=[S.b,S.a];bump();
+};
+/* Configurações salvas */
+const CFG=['brand','nA','nB','cA','cB','dur','goal','plen','acc','scl','pos'],DEF={};
+CFG.forEach(i=>DEF[i]=$(i).value);
+function applyCfg(){document.documentElement.style.setProperty('--gold',$('acc').value);$('brand2').value=$('brand').value}
+function saveCfg(){try{const o={};CFG.forEach(i=>o[i]=$(i).value);localStorage.setItem('livefut',JSON.stringify(o))}catch(e){}}
+try{const o=JSON.parse(localStorage.getItem('livefut')||'{}');CFG.forEach(i=>{if(o[i]!==undefined)$(i).value=o[i]})}catch(e){}
+applyCfg();
+$('brand2').oninput=()=>{$('brand').value=$('brand2').value;saveCfg()};
+$('brand').addEventListener('input',()=>{$('brand2').value=$('brand').value});
+CFG.forEach(i=>$(i).addEventListener('input',()=>{applyCfg();saveCfg()}));
+$('bDef').onclick=()=>{if(confirm('Restaurar todas as configurações?')){CFG.forEach(i=>$(i).value=DEF[i]);applyCfg();saveCfg()}};
 /* Gravação do jogo inteiro (placar embutido) */
 let out=null,full=[],recOn=false,mime='';
 function pickMime(){return ['video/mp4','video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'].find(m=>MediaRecorder.isTypeSupported(m))||''}
